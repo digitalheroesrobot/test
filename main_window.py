@@ -1499,6 +1499,7 @@ class MainWindow(QMainWindow):
             for item in self.patch_inspection.values()
         )
 
+    
     def _refresh_patch_progress(self):
         """
         Refresh Stage 2 patch inspection progress.
@@ -1526,7 +1527,11 @@ class MainWindow(QMainWindow):
 
         self.patch_progress_bar.setValue(percentage)
 
-        if total > 0 and inspected == total:
+        all_inspected = (
+            total > 0 and inspected == total
+        )
+
+        if all_inspected:
             self.patch_progress_label.setStyleSheet(
                 "color: #00E676; font-weight: bold;"
             )
@@ -1535,22 +1540,22 @@ class MainWindow(QMainWindow):
                 "color: #D8E5ED; font-weight: bold;"
             )
 
-        all_inspected = (
-            total > 0
-            and inspected == total
-        )
-
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
         ] = all_inspected
 
         self._refresh_stage2_action_visibility()
 
+
+    
     
     
     def _refresh_stage2_action_visibility(self):
         """
-        Refresh Stage 2 inspection status and main action button.
+        Show PATCH INSPECTION IN PROGRESS only below 100%.
+
+        At 100%, hide the status message and show
+        the SPRAY TRAJECTORY button.
         """
 
         status_label = getattr(
@@ -1565,13 +1570,12 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "start_analysis_button"):
             return
 
-        if self.active_stage != STAGE_SURFACE_IDENTIFICATION:
+        # Hide status outside Stage 2.
+        if (
+            self.active_stage != STAGE_SURFACE_IDENTIFICATION
+            or self.current_stage2_result is None
+        ):
             status_label.hide()
-            return
-
-        if self.current_stage2_result is None:
-            status_label.hide()
-            self.start_analysis_button.setVisible(True)
             return
 
         total = len(self.patch_inspection)
@@ -1582,8 +1586,14 @@ class MainWindow(QMainWindow):
             if bool(item.get("inspected", False))
         )
 
+        percentage = (
+            inspected / total * 100.0
+            if total > 0
+            else 0.0
+        )
+
         all_inspected = (
-            total > 0 and inspected == total
+            total > 0 and percentage >= 100.0
         )
 
         self.stage_completed[
@@ -1592,6 +1602,7 @@ class MainWindow(QMainWindow):
 
         if all_inspected:
 
+            # 100%: hide progress message.
             status_label.hide()
 
             self.start_analysis_button.setText(
@@ -1609,6 +1620,7 @@ class MainWindow(QMainWindow):
 
         else:
 
+            # Below 100%: show progress message.
             status_label.setText(
                 "PATCH INSPECTION IN PROGRESS"
             )
@@ -1620,6 +1632,7 @@ class MainWindow(QMainWindow):
             status_label.show()
 
             self.start_analysis_button.setVisible(False)
+
 
     # ========================================================
     # STAGE 2 MANUAL DECISION APPLICATION
