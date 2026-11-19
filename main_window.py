@@ -946,14 +946,52 @@ class MainWindow(QMainWindow):
         patch_layout.setContentsMargins(5, 2, 5, 4)
         patch_layout.setSpacing(5)
 
+        
         self.patch_progress_label = QLabel("INSPECTED: 0 / 0")
         self.patch_progress_label.setObjectName("MetricValue")
         patch_layout.addWidget(self.patch_progress_label)
 
-        # Stage 2 inspection status message
+        # Stage 2 inspection status
         self.patch_inspection_status_label = QLabel(
             "PATCH INSPECTION IN PROGRESS"
         )
+
+        self.patch_inspection_status_label.setObjectName(
+            "PatchInspectionStatus"
+        )
+
+        self.patch_inspection_status_label.setAlignment(
+            Qt.AlignCenter
+        )
+
+        self.patch_inspection_status_label.setWordWrap(True)
+
+        self.patch_inspection_status_label.setStyleSheet("""
+            QLabel {
+                color: #FFD740;
+                font-weight: bold;
+                padding: 6px;
+            }
+        """)
+
+        self.patch_inspection_status_label.hide()
+
+        patch_layout.addWidget(
+            self.patch_inspection_status_label
+        )
+
+        self.patch_progress_bar = QProgressBar()
+        self.patch_progress_bar.setRange(0, 100)
+        self.patch_progress_bar.setValue(0)
+        self.patch_progress_bar.setFixedHeight(10)
+
+        patch_layout.addWidget(
+            self.patch_progress_bar
+        )
+
+
+        # Stage 2 inspection status message
+        
         self.patch_inspection_status_label.setObjectName("Muted")
         self.patch_inspection_status_label.setStyleSheet(
             "color: #FFD740; font-weight: bold;"
@@ -1508,38 +1546,32 @@ class MainWindow(QMainWindow):
 
         self._refresh_stage2_action_visibility()
 
+    
+    
     def _refresh_stage2_action_visibility(self):
         """
-        Control the Stage 2 inspection message and action button.
-
-        Below 100%:
-            Show inspection message.
-            Hide main action button.
-
-        At 100%:
-            Hide inspection message.
-            Show SPRAY TRAJECTORY button.
+        Refresh Stage 2 inspection status and main action button.
         """
 
-        if not hasattr(
+        status_label = getattr(
             self,
             "patch_inspection_status_label",
-        ):
-            return
-
-        if not hasattr(
-            self,
-            "start_analysis_button",
-        ):
-            return
-
-        stage2_active = (
-            self.active_stage == STAGE_SURFACE_IDENTIFICATION
-            and self.current_stage2_result is not None
+            None,
         )
 
-        if not stage2_active:
-            self.patch_inspection_status_label.hide()
+        if status_label is None:
+            return
+
+        if not hasattr(self, "start_analysis_button"):
+            return
+
+        if self.active_stage != STAGE_SURFACE_IDENTIFICATION:
+            status_label.hide()
+            return
+
+        if self.current_stage2_result is None:
+            status_label.hide()
+            self.start_analysis_button.setVisible(True)
             return
 
         total = len(self.patch_inspection)
@@ -1551,8 +1583,7 @@ class MainWindow(QMainWindow):
         )
 
         all_inspected = (
-            total > 0
-            and inspected == total
+            total > 0 and inspected == total
         )
 
         self.stage_completed[
@@ -1561,7 +1592,7 @@ class MainWindow(QMainWindow):
 
         if all_inspected:
 
-            self.patch_inspection_status_label.hide()
+            status_label.hide()
 
             self.start_analysis_button.setText(
                 "SPRAY TRAJECTORY"
@@ -1578,13 +1609,18 @@ class MainWindow(QMainWindow):
 
         else:
 
-            self.patch_inspection_status_label.setText(
+            status_label.setText(
                 "PATCH INSPECTION IN PROGRESS"
             )
 
-            self.patch_inspection_status_label.show()
+            status_label.setStyleSheet(
+                "color: #FFD740; font-weight: bold;"
+            )
+
+            status_label.show()
 
             self.start_analysis_button.setVisible(False)
+
     # ========================================================
     # STAGE 2 MANUAL DECISION APPLICATION
     # ========================================================
