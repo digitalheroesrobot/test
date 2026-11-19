@@ -452,6 +452,33 @@ class MainWindow(QMainWindow):
         if button is not None:
             button.setChecked(False)
 
+    def _expand_patch_inspection_section(self):
+        button = self._right_section_buttons.get(
+            "patch_inspection"
+        )
+
+        if button is not None:
+            button.setChecked(True)
+
+
+    def _set_patch_inspection_readonly(self, readonly=True):
+        for widgets in self.patch_row_widgets.values():
+
+            checkbox = widgets.get("checkbox")
+            decision = widgets.get("decision")
+
+            if checkbox is not None:
+                checkbox.setEnabled(not readonly)
+
+            if decision is not None:
+                decision.setEnabled(not readonly)
+
+            # Keep 3D patch selection available.
+            select_button = widgets.get("select_button")
+
+            if select_button is not None:
+                select_button.setEnabled(True)
+
     def _build_ui(self):
         central = QWidget()
 
@@ -2712,7 +2739,7 @@ class MainWindow(QMainWindow):
 
             # Start Stage 3 immediately.
             self.run_spray_trajectory()
-
+            self._set_patch_inspection_readonly(True)
             return
 
         # ----------------------------------------------------
@@ -3241,6 +3268,8 @@ class MainWindow(QMainWindow):
                 STAGE_SURFACE_IDENTIFICATION
             ] = False
 
+            self._set_patch_inspection_readonly(False)
+            self._expand_patch_inspection_section()
             # This now rebuilds the result from the untouched
             # automatic baseline. Since no patches are inspected
             # yet, the automatic labels remain unchanged.
