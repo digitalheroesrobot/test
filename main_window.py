@@ -1238,9 +1238,11 @@ class MainWindow(QMainWindow):
     
     def _initialize_patch_inspection(self):
         """
-        Initialize all patches with:
-            - Inspected: True
-            - Decision: Paint
+        Default painting configuration:
+        - Every patch is included for painting.
+        - Every patch checkbox is checked.
+        - Every patch decision is Paint.
+        - Initial progress is 100%.
         """
 
         patch_ids = self._get_stage1_patch_ids()
@@ -1499,118 +1501,90 @@ class MainWindow(QMainWindow):
             for item in self.patch_inspection.values()
         )
 
-    
     def _refresh_patch_progress(self):
         """
-        Refresh Stage 2 patch inspection progress.
+        Calculate the percentage of patches included in painting.
 
-        Stage 2 is complete only when every patch is inspected.
+        All patches are included by default.
+        Unchecking one patch reduces the percentage.
         """
 
         total = len(self.patch_inspection)
 
-        inspected = sum(
+        included = sum(
             1
-            for item in self.patch_inspection.values()
-            if bool(item.get("inspected", False))
+            for state in self.patch_inspection.values()
+            if state.get("inspected", True)
         )
 
         percentage = (
-            int(round(inspected / total * 100))
+            int(round(included * 100.0 / total))
             if total > 0
             else 0
         )
 
         self.patch_progress_label.setText(
-            f"INSPECTED: {inspected} / {total}"
+            f"PAINTABLE PATCHES: {included} / {total}  ({percentage}%)"
         )
 
         self.patch_progress_bar.setValue(percentage)
 
-        all_inspected = (
-            total > 0 and inspected == total
+        all_included = (
+            total > 0 and included == total
         )
-
-        if all_inspected:
-            self.patch_progress_label.setStyleSheet(
-                "color: #00E676; font-weight: bold;"
-            )
-        else:
-            self.patch_progress_label.setStyleSheet(
-                "color: #D8E5ED; font-weight: bold;"
-            )
 
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
-        ] = all_inspected
+        ] = all_included
 
         self._refresh_stage2_action_visibility()
 
-
-    
     
     
     def _refresh_stage2_action_visibility(self):
         """
-        Show PATCH INSPECTION IN PROGRESS only below 100%.
-
-        At 100%, hide the status message and show
-        the SPRAY TRAJECTORY button.
+        Enable spray trajectory generation only when
+        all patches are included in the painting configuration.
         """
-
-        status_label = getattr(
-            self,
-            "patch_inspection_status_label",
-            None,
-        )
-
-        if status_label is None:
-            return
 
         if not hasattr(self, "start_analysis_button"):
             return
 
-        # Hide status outside Stage 2.
-        if (
-            self.active_stage != STAGE_SURFACE_IDENTIFICATION
-            or self.current_stage2_result is None
-        ):
-            status_label.hide()
+        if not hasattr(self, "patch_inspection_status_label"):
+            return
+
+        if self.active_stage != STAGE_SURFACE_IDENTIFICATION:
+            self.patch_inspection_status_label.hide()
+            return
+
+        if self.current_stage2_result is None:
+            self.patch_inspection_status_label.hide()
             return
 
         total = len(self.patch_inspection)
 
-        inspected = sum(
+        included = sum(
             1
-            for item in self.patch_inspection.values()
-            if bool(item.get("inspected", False))
+            for state in self.patch_inspection.values()
+            if state.get("inspected", True)
         )
 
-        percentage = (
-            inspected / total * 100.0
-            if total > 0
-            else 0.0
-        )
-
-        all_inspected = (
-            total > 0 and percentage >= 100.0
+        all_included = (
+            total > 0 and included == total
         )
 
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
-        ] = all_inspected
+        ] = all_included
 
-        if all_inspected:
+        self.start_analysis_button.setText(
+            "SPRAY TRAJECTORY"
+        )
 
-            # 100%: hide progress message.
-            status_label.hide()
-
-            self.start_analysis_button.setText(
-                "SPRAY TRAJECTORY"
-            )
+        if all_included:
+            self.patch_inspection_status_label.hide()
 
             self.start_analysis_button.setVisible(True)
-
             self.start_analysis_button.setEnabled(
                 not self._operation_running
                 and self._stage_available(
@@ -1619,20 +1593,14 @@ class MainWindow(QMainWindow):
             )
 
         else:
-
-            # Below 100%: show progress message.
-            status_label.setText(
-                "PATCH INSPECTION IN PROGRESS"
+            self.patch_inspection_status_label.setText(
+                "PAINTING CONFIGURATION INCOMPLETE"
             )
 
-            status_label.setStyleSheet(
-                "color: #FFD740; font-weight: bold;"
-            )
+            self.patch_inspection_status_label.show()
 
-            status_label.show()
-
-            self.start_analysis_button.setVisible(False)
-
+            self.start_analysis_button.setVisible(True)
+            self.start_analysis_button.setEnabled(False)
 
     # ========================================================
     # STAGE 2 MANUAL DECISION APPLICATION
