@@ -2117,7 +2117,9 @@ class MainWindow(QMainWindow):
     # WORKFLOW STATE
     # ========================================================
 
+    
     def _stage_available(self, stage_index):
+
         if stage_index == STAGE_PRODUCT_SETUP:
             return True
 
@@ -2131,19 +2133,32 @@ class MainWindow(QMainWindow):
             return (
                 self.current_mesh is not None
                 and self._source_unit_ready()
-                and self.stage_completed[STAGE_GEOMETRY_INSPECTION]
+                and self.stage_completed[
+                    STAGE_GEOMETRY_INSPECTION
+                ]
                 and self.current_stage1_result is not None
             )
 
         if stage_index == STAGE_SPRAY_TRAJECTORY:
+
+            all_patches_inspected = (
+                self.current_stage2_result is not None
+                and bool(self.patch_inspection)
+                and self._all_patches_inspected()
+            )
+
             return (
                 self.current_mesh is not None
                 and self._source_unit_ready()
-                and self.stage_completed[STAGE_SURFACE_IDENTIFICATION]
-                and self.current_stage2_result is not None
+                and self.stage_completed[
+                    STAGE_GEOMETRY_INSPECTION
+                ]
+                and self.current_stage1_result is not None
+                and all_patches_inspected
             )
 
         return False
+
 
     def _select_workflow_stage(self, stage_index):
         if self._operation_running:
@@ -2176,7 +2191,9 @@ class MainWindow(QMainWindow):
                 self._display_current_trajectory()
 
     
+    
     def _refresh_workflow_ui(self):
+
         stage = WORKFLOW_STAGES[self.active_stage]
 
         self.current_stage_label.setText(stage["name"])
@@ -2185,10 +2202,25 @@ class MainWindow(QMainWindow):
         self._set_coordinate_unit_controls()
 
         # ----------------------------------------------------
+        # SYNCHRONIZE STAGE 2 COMPLETION
+        # ----------------------------------------------------
+
+        all_patches_inspected = (
+            self.current_stage2_result is not None
+            and bool(self.patch_inspection)
+            and self._all_patches_inspected()
+        )
+
+        self.stage_completed[
+            STAGE_SURFACE_IDENTIFICATION
+        ] = all_patches_inspected
+
+        # ----------------------------------------------------
         # WORKFLOW NAVIGATION BUTTONS
         # ----------------------------------------------------
 
         for index, button in enumerate(self.workflow_buttons):
+
             available = self._stage_available(index)
 
             button.setEnabled(
@@ -2199,10 +2231,13 @@ class MainWindow(QMainWindow):
 
             if index == self.active_stage:
                 button.setObjectName("StageActive")
+
             elif self.stage_completed.get(index, False):
                 button.setObjectName("StageComplete")
+
             elif available:
                 button.setObjectName("StageAvailable")
+
             else:
                 button.setObjectName("StageDisabled")
 
@@ -2214,12 +2249,7 @@ class MainWindow(QMainWindow):
         # ----------------------------------------------------
 
         if self.active_stage == STAGE_SPRAY_TRAJECTORY:
-            patch_button = self._right_section_buttons.get(
-                "patch_inspection"
-            )
-
-            if patch_button is not None:
-                patch_button.setChecked(False)
+            self._collapse_patch_inspection_section()
 
         # ----------------------------------------------------
         # MAIN ACTION BUTTON
@@ -2230,6 +2260,7 @@ class MainWindow(QMainWindow):
             self.start_analysis_button.setText(
                 "LOAD STL PRODUCT"
             )
+
             self.start_analysis_button.setEnabled(
                 not self._operation_running
             )
@@ -2241,6 +2272,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "GEOMETRY INSPECTION COMPLETE"
                 )
+
                 self.start_analysis_button.setEnabled(False)
 
             else:
@@ -2248,6 +2280,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "ANALYZE PRODUCT GEOMETRY"
                 )
+
                 self.start_analysis_button.setEnabled(
                     self.current_mesh is not None
                     and self._source_unit_ready()
@@ -2261,6 +2294,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "IDENTIFY PAINTABLE SURFACES"
                 )
+
                 self.start_analysis_button.setEnabled(
                     self._stage_available(
                         STAGE_SURFACE_IDENTIFICATION
@@ -2268,11 +2302,12 @@ class MainWindow(QMainWindow):
                     and not self._operation_running
                 )
 
-            elif self._all_patches_inspected():
+            elif all_patches_inspected:
 
                 self.start_analysis_button.setText(
                     "SPRAY TRAJECTORY"
                 )
+
                 self.start_analysis_button.setEnabled(
                     self._stage_available(
                         STAGE_SPRAY_TRAJECTORY
@@ -2285,6 +2320,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "PATCH INSPECTION IN PROGRESS"
                 )
+
                 self.start_analysis_button.setEnabled(False)
 
         elif self.active_stage == STAGE_SPRAY_TRAJECTORY:
@@ -2297,6 +2333,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "SPRAY TRAJECTORY COMPLETE"
                 )
+
                 self.start_analysis_button.setEnabled(False)
 
             else:
@@ -2304,6 +2341,7 @@ class MainWindow(QMainWindow):
                 self.start_analysis_button.setText(
                     "GENERATE SPRAY TRAJECTORY"
                 )
+
                 self.start_analysis_button.setEnabled(
                     self._stage_available(
                         STAGE_SPRAY_TRAJECTORY
@@ -2316,6 +2354,7 @@ class MainWindow(QMainWindow):
             self.start_analysis_button.setText(
                 stage["action"]
             )
+
             self.start_analysis_button.setEnabled(False)
 
         # ----------------------------------------------------
@@ -2374,7 +2413,7 @@ class MainWindow(QMainWindow):
 
         elif (
             self.active_stage == STAGE_SURFACE_IDENTIFICATION
-            and self._all_patches_inspected()
+            and all_patches_inspected
         ):
 
             self._set_workflow_status(
@@ -2429,6 +2468,7 @@ class MainWindow(QMainWindow):
 
         self._refresh_pipeline()
         self._refresh_stage2_action_visibility()
+
 
 
     def _refresh_stage2_action_visibility(self):
