@@ -826,6 +826,7 @@ class MainWindow(QMainWindow):
     # ========================================================
 
     
+    
     def _build_right_panel(self):
         panel = self._panel()
 
@@ -868,8 +869,9 @@ class MainWindow(QMainWindow):
             active_content,
         )
 
-        # Default: collapsed
-        self._right_section_buttons["active_workflow"].setChecked(False)
+        self._right_section_buttons[
+            "active_workflow"
+        ].setChecked(False)
 
         layout.addWidget(active_section)
 
@@ -922,13 +924,14 @@ class MainWindow(QMainWindow):
             summary_content,
         )
 
-        # Default: collapsed
-        self._right_section_buttons["stage_summary"].setChecked(False)
+        self._right_section_buttons[
+            "stage_summary"
+        ].setChecked(False)
 
         layout.addWidget(summary_section)
 
         # ----------------------------------------------------
-        # PATCH INSPECTION SECTION
+        # PAINTING PATCHES SECTION
         # ----------------------------------------------------
         self.patch_inspection_panel = QFrame()
         self.patch_inspection_panel.setObjectName(
@@ -946,120 +949,69 @@ class MainWindow(QMainWindow):
         patch_layout.setContentsMargins(5, 2, 5, 4)
         patch_layout.setSpacing(5)
 
-        
-        self.patch_progress_label = QLabel("INSPECTED: 0 / 0")
+        # ----------------------------------------------------
+        # PAINTING SELECTION SUMMARY
+        # ----------------------------------------------------
+        self.patch_progress_label = QLabel(
+            "PAINTABLE PATCHES: 0 / 0 (0%)"
+        )
         self.patch_progress_label.setObjectName("MetricValue")
         patch_layout.addWidget(self.patch_progress_label)
 
-        # Stage 2 inspection status
+        # ----------------------------------------------------
+        # PAINTING SELECTION STATUS
+        # Exactly one status label
+        # ----------------------------------------------------
         self.patch_inspection_status_label = QLabel(
-            "PATCH INSPECTION IN PROGRESS"
+            "PAINTING SELECTION INCOMPLETE"
         )
-
         self.patch_inspection_status_label.setObjectName(
             "PatchInspectionStatus"
         )
-
         self.patch_inspection_status_label.setAlignment(
             Qt.AlignCenter
         )
-
         self.patch_inspection_status_label.setWordWrap(True)
-
         self.patch_inspection_status_label.setStyleSheet("""
             QLabel {
                 color: #FFD740;
                 font-weight: bold;
-                padding: 6px;
+                padding: 5px;
             }
         """)
-
         self.patch_inspection_status_label.hide()
 
         patch_layout.addWidget(
             self.patch_inspection_status_label
         )
 
+        # ----------------------------------------------------
+        # PAINTING SELECTION PROGRESS
+        # Exactly one patch progress bar
+        # ----------------------------------------------------
         self.patch_progress_bar = QProgressBar()
         self.patch_progress_bar.setRange(0, 100)
-        self.patch_progress_bar.setValue(0)
+        self.patch_progress_bar.setValue(100)
+        self.patch_progress_bar.setFormat("%p%")
         self.patch_progress_bar.setFixedHeight(10)
 
-        patch_layout.addWidget(
-            self.patch_progress_bar
-        )
+        patch_layout.addWidget(self.patch_progress_bar)
 
-
-        # Stage 2 inspection status message
-        
-        self.patch_inspection_status_label.setObjectName("Muted")
-        self.patch_inspection_status_label.setStyleSheet(
-            "color: #FFD740; font-weight: bold;"
-        )
-        self.patch_inspection_status_label.setWordWrap(True)
-        self.patch_inspection_status_label.hide()
-
-        patch_layout.addWidget(
-            self.patch_inspection_status_label
-        )
-
-        self.patch_inspection_status_label = QLabel(
-            "PATCH INSPECTION IN PROGRESS"
-        )
-        self.patch_inspection_status_label.setStyleSheet(
-            "color: #FFD740; font-weight: bold;"
-        )
-        self.patch_inspection_status_label.setWordWrap(True)
-        patch_layout.addWidget(
-            self.patch_inspection_status_label
-        )
-
-        self.patch_progress_bar = QProgressBar()
-        self.patch_progress_bar.setRange(0, 100)
-        self.patch_progress_bar.setValue(0)
-        self.patch_progress_bar.setFixedHeight(10)
-        patch_layout.addWidget(
-            self.patch_progress_bar
-        )
-
+        # ----------------------------------------------------
+        # INSTRUCTIONS
+        # ----------------------------------------------------
         self.patch_instruction_label = QLabel(
-            "Select a Patch, inspect it in 3D, "
-            "choose a decision, and mark it inspected."
+            "All patches are selected for painting by default. "
+            "Uncheck a patch to exclude it from painting. "
+            "SPRAY TRAJECTORY becomes available when all "
+            "patches are selected."
         )
         self.patch_instruction_label.setWordWrap(True)
-        self.patch_instruction_label.setObjectName(
-            "Muted"
-        )
+        self.patch_instruction_label.setObjectName("Muted")
+
         patch_layout.addWidget(
             self.patch_instruction_label
         )
-
-        # ----------------------------------------------------
-        # PATCH INSPECTION STATUS MESSAGE
-        # ----------------------------------------------------
-        self.patch_inspection_status_label = QLabel(
-            "PATCH INSPECTION IN PROGRESS"
-        )
-        self.patch_inspection_status_label.setAlignment(
-            Qt.AlignCenter
-        )
-        self.patch_inspection_status_label.setWordWrap(True)
-        self.patch_inspection_status_label.setStyleSheet(
-            """
-            QLabel {
-                color: #FFD740;
-                font-weight: bold;
-                padding: 6px;
-            }
-            """
-        )
-
-        patch_layout.addWidget(
-            self.patch_inspection_status_label
-        )
-
-        # Hidden until Stage 2 inspection starts.
-        self.patch_inspection_status_label.hide()
 
         # ----------------------------------------------------
         # PATCH LIST
@@ -1073,7 +1025,6 @@ class MainWindow(QMainWindow):
         self.patch_scroll.setVerticalScrollBarPolicy(
             Qt.ScrollBarAlwaysOn
         )
-
         self.patch_scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarAlwaysOff
         )
@@ -1096,8 +1047,13 @@ class MainWindow(QMainWindow):
             self.patch_scroll
         )
 
+        # ----------------------------------------------------
+        # PATCH ACCORDION
+        # Keep the internal ID unchanged because other
+        # functions use "patch_inspection".
+        # ----------------------------------------------------
         patch_section = self._make_collapsible_section(
-            "PATCH INSPECTION",
+            "PAINTING PATCHES",
             "patch_inspection",
             patch_content,
         )
@@ -1134,6 +1090,8 @@ class MainWindow(QMainWindow):
 
         # ----------------------------------------------------
         # OPERATION PROGRESS
+        # This is a separate progress indicator for running
+        # operations, not the patch-selection progress bar.
         # ----------------------------------------------------
         self.operation_panel = QFrame()
         self.operation_panel.setObjectName(
@@ -1154,6 +1112,7 @@ class MainWindow(QMainWindow):
         self.operation_status_label.setStyleSheet(
             "color: #00E5FF; font-weight: bold;"
         )
+
         progress_layout.addWidget(
             self.operation_status_label
         )
@@ -1167,15 +1126,13 @@ class MainWindow(QMainWindow):
             self.operation_progress
         )
 
-        self.operation_panel.setStyleSheet(
-            """
+        self.operation_panel.setStyleSheet("""
             QFrame#OperationProgressPanel {
                 background-color: #0D1822;
                 border: 1px solid #203746;
                 border-radius: 5px;
             }
-            """
-        )
+        """)
 
         self.operation_panel.hide()
 
@@ -1190,15 +1147,14 @@ class MainWindow(QMainWindow):
             "RESULT DIRECTORY: --"
         )
         self.results_path_label.setWordWrap(True)
-        self.results_path_label.setObjectName(
-            "Muted"
-        )
+        self.results_path_label.setObjectName("Muted")
 
         layout.addWidget(
             self.results_path_label
         )
 
         return panel
+
 
     # ========================================================
     # STAGE 2 PATCH LIST
@@ -1480,13 +1436,13 @@ class MainWindow(QMainWindow):
 
         if all_inspected:
             self.status_bar.showMessage(
-                "ALL PATCHES INSPECTED  |  "
-                "STAGE 2 COMPLETE  |  "
+                "PAINTING SELECTION COMPLETE  |  "
+                "100% OF PATCHES INCLUDED  |  "
                 "SPRAY TRAJECTORY AVAILABLE"
             )
         else:
             self.status_bar.showMessage(
-                "PATCH INSPECTION IN PROGRESS"
+                "PAINTING SELECTION INCOMPLETE"
             )
 
         if self.active_stage == STAGE_SURFACE_IDENTIFICATION:
@@ -1502,50 +1458,41 @@ class MainWindow(QMainWindow):
         )
 
     def _refresh_patch_progress(self):
-        """
-        Calculate the percentage of patches included in painting.
-
-        All patches are included by default.
-        Unchecking one patch reduces the percentage.
-        """
+        """Update the percentage of patches selected for painting."""
 
         total = len(self.patch_inspection)
 
-        included = sum(
+        selected = sum(
             1
             for state in self.patch_inspection.values()
             if state.get("inspected", True)
         )
 
         percentage = (
-            int(round(included * 100.0 / total))
+            round(selected * 100 / total)
             if total > 0
             else 0
         )
 
         self.patch_progress_label.setText(
-            f"PAINTABLE PATCHES: {included} / {total}  ({percentage}%)"
+            f"PAINTABLE PATCHES: {selected} / {total} "
+            f"({percentage}%)"
         )
 
         self.patch_progress_bar.setValue(percentage)
 
-        all_included = (
-            total > 0 and included == total
-        )
+        all_selected = total > 0 and selected == total
 
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
-        ] = all_included
+        ] = all_selected
 
         self._refresh_stage2_action_visibility()
 
     
     
     def _refresh_stage2_action_visibility(self):
-        """
-        Enable spray trajectory generation only when
-        all patches are included in the painting configuration.
-        """
+        """Control trajectory generation based on painting selection."""
 
         if not hasattr(self, "start_analysis_button"):
             return
@@ -1563,43 +1510,33 @@ class MainWindow(QMainWindow):
 
         total = len(self.patch_inspection)
 
-        included = sum(
+        selected = sum(
             1
             for state in self.patch_inspection.values()
             if state.get("inspected", True)
         )
 
-        all_included = (
-            total > 0 and included == total
-        )
+        all_selected = total > 0 and selected == total
 
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
-        ] = all_included
+        ] = all_selected
 
-        self.start_analysis_button.setText(
-            "SPRAY TRAJECTORY"
-        )
+        self.start_analysis_button.setText("SPRAY TRAJECTORY")
+        self.start_analysis_button.setVisible(True)
 
-        if all_included:
+        if all_selected:
             self.patch_inspection_status_label.hide()
-
-            self.start_analysis_button.setVisible(True)
             self.start_analysis_button.setEnabled(
                 not self._operation_running
-                and self._stage_available(
-                    STAGE_SPRAY_TRAJECTORY
-                )
+                and self._stage_available(STAGE_SPRAY_TRAJECTORY)
             )
-
         else:
             self.patch_inspection_status_label.setText(
-                "PAINTING CONFIGURATION INCOMPLETE"
+                "PAINTING SELECTION INCOMPLETE — "
+                "select all patches to enable spray trajectory."
             )
-
             self.patch_inspection_status_label.show()
-
-            self.start_analysis_button.setVisible(True)
             self.start_analysis_button.setEnabled(False)
 
     # ========================================================
