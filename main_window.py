@@ -439,7 +439,19 @@ class MainWindow(QMainWindow):
     # ========================================================
 
     
-    
+    def _collapse_patch_inspection_section(self):
+        """
+        Collapse the Patch Inspection accordion section.
+        Keep its header available in the sidebar.
+        """
+
+        button = self._right_section_buttons.get(
+            "patch_inspection"
+        )
+
+        if button is not None:
+            button.setChecked(False)
+
     def _build_ui(self):
         central = QWidget()
 
@@ -457,7 +469,10 @@ class MainWindow(QMainWindow):
         # WORKFLOW NAVIGATION
         # ----------------------------------------------------
 
-        root.addWidget(self._build_workflow_bar())
+        # Keep workflow navigation objects for internal state,
+        # but do not display the navigation bar.
+        self.workflow_bar = self._build_workflow_bar()
+        self.workflow_bar.hide()
 
         # ----------------------------------------------------
         # MAIN WORKSPACE
@@ -904,14 +919,23 @@ class MainWindow(QMainWindow):
         patch_layout.setContentsMargins(5, 2, 5, 4)
         patch_layout.setSpacing(5)
 
-        self.patch_progress_label = QLabel(
-            "INSPECTED: 0 / 0"
+        self.patch_progress_label = QLabel("INSPECTED: 0 / 0")
+        self.patch_progress_label.setObjectName("MetricValue")
+        patch_layout.addWidget(self.patch_progress_label)
+
+        # Stage 2 inspection status message
+        self.patch_inspection_status_label = QLabel(
+            "PATCH INSPECTION IN PROGRESS"
         )
-        self.patch_progress_label.setObjectName(
-            "MetricValue"
+        self.patch_inspection_status_label.setObjectName("Muted")
+        self.patch_inspection_status_label.setStyleSheet(
+            "color: #FFD740; font-weight: bold;"
         )
+        self.patch_inspection_status_label.setWordWrap(True)
+        self.patch_inspection_status_label.hide()
+
         patch_layout.addWidget(
-            self.patch_progress_label
+            self.patch_inspection_status_label
         )
 
         self.patch_inspection_status_label = QLabel(
@@ -1357,15 +1381,14 @@ class MainWindow(QMainWindow):
 
     def _on_patch_inspection_updated(self):
         """
-        Handle any change to Stage 2 patch inspection state.
+        Handle changes to patch inspection checkboxes
+        and painting decisions.
         """
 
         try:
-
             self._apply_manual_patch_decisions()
 
         except Exception as exc:
-
             traceback.print_exc()
 
             QMessageBox.critical(
@@ -1380,85 +1403,26 @@ class MainWindow(QMainWindow):
 
         self._persist_patch_inspection()
 
-        all_inspected = (
-            self._all_patches_inspected()
-        )
-
-        self.stage_completed[
-            STAGE_SURFACE_IDENTIFICATION
-        ] = all_inspected
-
-        self._refresh_workflow_ui()
-
-        if all_inspected:
-
-            self.status_bar.showMessage(
-                "ALL PATCHES INSPECTED | "
-                "STAGE 2 COMPLETE | "
-                "SPRAY TRAJECTORY AVAILABLE"
-            )
-
-        else:
-
-            self.status_bar.showMessage(
-                "PATCH INSPECTION IN PROGRESS"
-            )
-
-        if (
-            self.active_stage
-            == STAGE_SURFACE_IDENTIFICATION
-        ):
-
-            self._show_surface_identification_summary()
-        # ------------------------------------------------------------
-        # UPDATE PATCH PROGRESS
-        # ------------------------------------------------------------
-        self._refresh_patch_progress()
-
-        # ------------------------------------------------------------
-        # SAVE CURRENT INSPECTION STATE
-        # ------------------------------------------------------------
-        self._persist_patch_inspection()
-
-        # ------------------------------------------------------------
-        # CHECK COMPLETION
-        # ------------------------------------------------------------
         all_inspected = self._all_patches_inspected()
 
         self.stage_completed[
             STAGE_SURFACE_IDENTIFICATION
         ] = all_inspected
 
-        # ------------------------------------------------------------
-        # REFRESH COMPLETE WORKFLOW UI
-        # ------------------------------------------------------------
         self._refresh_workflow_ui()
 
-        # ------------------------------------------------------------
-        # STATUS BAR
-        # ------------------------------------------------------------
         if all_inspected:
-
             self.status_bar.showMessage(
-                "ALL PATCHES INSPECTED | "
-                "STAGE 2 COMPLETE | "
+                "ALL PATCHES INSPECTED  |  "
+                "STAGE 2 COMPLETE  |  "
                 "SPRAY TRAJECTORY AVAILABLE"
             )
-
         else:
-
             self.status_bar.showMessage(
                 "PATCH INSPECTION IN PROGRESS"
             )
 
-        # ------------------------------------------------------------
-        # UPDATE STAGE 2 SUMMARY
-        # ------------------------------------------------------------
-        if (
-            self.active_stage
-            == STAGE_SURFACE_IDENTIFICATION
-        ):
-
+        if self.active_stage == STAGE_SURFACE_IDENTIFICATION:
             self._show_surface_identification_summary()
 
     def _all_patches_inspected(self):
@@ -1477,49 +1441,31 @@ class MainWindow(QMainWindow):
         Stage 2 is complete only when every patch is inspected.
         """
 
-        total = len(
-            self.patch_inspection
-        )
+        total = len(self.patch_inspection)
 
         inspected = sum(
             1
             for item in self.patch_inspection.values()
-            if item.get("inspected", False)
+            if bool(item.get("inspected", False))
         )
 
-        if total > 0:
-
-            percentage = int(
-                round(
-                    inspected
-                    / total
-                    * 100
-                )
-            )
-
-        else:
-
-            percentage = 0
+        percentage = (
+            int(round(inspected / total * 100))
+            if total > 0
+            else 0
+        )
 
         self.patch_progress_label.setText(
             f"INSPECTED: {inspected} / {total}"
         )
 
-        self.patch_progress_bar.setValue(
-            percentage
-        )
+        self.patch_progress_bar.setValue(percentage)
 
-        if (
-            total > 0
-            and inspected == total
-        ):
-
+        if total > 0 and inspected == total:
             self.patch_progress_label.setStyleSheet(
                 "color: #00E676; font-weight: bold;"
             )
-
         else:
-
             self.patch_progress_label.setStyleSheet(
                 "color: #D8E5ED; font-weight: bold;"
             )
@@ -1537,13 +1483,27 @@ class MainWindow(QMainWindow):
 
     def _refresh_stage2_action_visibility(self):
         """
-        Synchronize Stage 2 inspection status and action button.
+        Control the Stage 2 inspection message and action button.
+
+        Below 100%:
+            Show inspection message.
+            Hide main action button.
+
+        At 100%:
+            Hide inspection message.
+            Show SPRAY TRAJECTORY button.
         """
 
-        if not hasattr(self, "patch_inspection_status_label"):
+        if not hasattr(
+            self,
+            "patch_inspection_status_label",
+        ):
             return
 
-        if not hasattr(self, "start_analysis_button"):
+        if not hasattr(
+            self,
+            "start_analysis_button",
+        ):
             return
 
         stage2_active = (
@@ -1551,30 +1511,53 @@ class MainWindow(QMainWindow):
             and self.current_stage2_result is not None
         )
 
-        all_inspected = self._all_patches_inspected()
-
         if not stage2_active:
             self.patch_inspection_status_label.hide()
             return
 
+        total = len(self.patch_inspection)
+
+        inspected = sum(
+            1
+            for item in self.patch_inspection.values()
+            if bool(item.get("inspected", False))
+        )
+
+        all_inspected = (
+            total > 0
+            and inspected == total
+        )
+
+        self.stage_completed[
+            STAGE_SURFACE_IDENTIFICATION
+        ] = all_inspected
+
         if all_inspected:
+
             self.patch_inspection_status_label.hide()
-            self.patch_instruction_label.hide()
+
+            self.start_analysis_button.setText(
+                "SPRAY TRAJECTORY"
+            )
 
             self.start_analysis_button.setVisible(True)
-            self.start_analysis_button.setText("SPRAY TRAJECTORY")
+
             self.start_analysis_button.setEnabled(
                 not self._operation_running
-                and self._stage_available(STAGE_SPRAY_TRAJECTORY)
+                and self._stage_available(
+                    STAGE_SPRAY_TRAJECTORY
+                )
             )
 
         else:
+
             self.patch_inspection_status_label.setText(
                 "PATCH INSPECTION IN PROGRESS"
             )
+
             self.patch_inspection_status_label.show()
-            self.patch_instruction_label.show()
-            self.start_analysis_button.hide()
+
+            self.start_analysis_button.setVisible(False)
     # ========================================================
     # STAGE 2 MANUAL DECISION APPLICATION
     # ========================================================
@@ -2192,16 +2175,12 @@ class MainWindow(QMainWindow):
                 self._show_stage3_outdated_summary()
                 self._display_current_trajectory()
 
+    
     def _refresh_workflow_ui(self):
         stage = WORKFLOW_STAGES[self.active_stage]
 
-        self.current_stage_label.setText(
-            stage["name"]
-        )
-
-        self.workflow_description.setText(
-            stage["description"]
-        )
+        self.current_stage_label.setText(stage["name"])
+        self.workflow_description.setText(stage["description"])
 
         self._set_coordinate_unit_controls()
 
@@ -2213,39 +2192,34 @@ class MainWindow(QMainWindow):
             available = self._stage_available(index)
 
             button.setEnabled(
-                available
-                and not self._operation_running
+                available and not self._operation_running
             )
 
-            button.setChecked(
-                index == self.active_stage
-            )
+            button.setChecked(index == self.active_stage)
 
             if index == self.active_stage:
-                button.setObjectName(
-                    "StageActive"
-                )
-
-            elif self.stage_completed.get(
-                index,
-                False,
-            ):
-                button.setObjectName(
-                    "StageComplete"
-                )
-
+                button.setObjectName("StageActive")
+            elif self.stage_completed.get(index, False):
+                button.setObjectName("StageComplete")
             elif available:
-                button.setObjectName(
-                    "StageAvailable"
-                )
-
+                button.setObjectName("StageAvailable")
             else:
-                button.setObjectName(
-                    "StageDisabled"
-                )
+                button.setObjectName("StageDisabled")
 
             button.style().unpolish(button)
             button.style().polish(button)
+
+        # ----------------------------------------------------
+        # COLLAPSE PATCH INSPECTION WHEN ENTERING STAGE 3
+        # ----------------------------------------------------
+
+        if self.active_stage == STAGE_SPRAY_TRAJECTORY:
+            patch_button = self._right_section_buttons.get(
+                "patch_inspection"
+            )
+
+            if patch_button is not None:
+                patch_button.setChecked(False)
 
         # ----------------------------------------------------
         # MAIN ACTION BUTTON
@@ -2253,42 +2227,27 @@ class MainWindow(QMainWindow):
 
         if self.active_stage == STAGE_PRODUCT_SETUP:
 
-            self.start_analysis_button.setVisible(
-                True
-            )
-
             self.start_analysis_button.setText(
                 "LOAD STL PRODUCT"
             )
-
             self.start_analysis_button.setEnabled(
                 not self._operation_running
             )
 
         elif self.active_stage == STAGE_GEOMETRY_INSPECTION:
 
-            self.start_analysis_button.setVisible(
-                True
-            )
-
-            if self.stage_completed[
-                STAGE_GEOMETRY_INSPECTION
-            ]:
+            if self.stage_completed[STAGE_GEOMETRY_INSPECTION]:
 
                 self.start_analysis_button.setText(
                     "GEOMETRY INSPECTION COMPLETE"
                 )
-
-                self.start_analysis_button.setEnabled(
-                    False
-                )
+                self.start_analysis_button.setEnabled(False)
 
             else:
 
                 self.start_analysis_button.setText(
                     "ANALYZE PRODUCT GEOMETRY"
                 )
-
                 self.start_analysis_button.setEnabled(
                     self.current_mesh is not None
                     and self._source_unit_ready()
@@ -2297,25 +2256,11 @@ class MainWindow(QMainWindow):
 
         elif self.active_stage == STAGE_SURFACE_IDENTIFICATION:
 
-            # Stage 2 patch inspection panel must be visible
-            # once a Stage 2 result exists.
-            if self.current_stage2_result is not None:
-                self.patch_inspection_panel.show()
-
-            # ------------------------------------------------
-            # STAGE 2 NOT STARTED YET
-            # ------------------------------------------------
-
             if self.current_stage2_result is None:
-
-                self.start_analysis_button.setVisible(
-                    True
-                )
 
                 self.start_analysis_button.setText(
                     "IDENTIFY PAINTABLE SURFACES"
                 )
-
                 self.start_analysis_button.setEnabled(
                     self._stage_available(
                         STAGE_SURFACE_IDENTIFICATION
@@ -2323,94 +2268,42 @@ class MainWindow(QMainWindow):
                     and not self._operation_running
                 )
 
-                if hasattr(
-                    self,
-                    "patch_inspection_status_label",
-                ):
-                    self.patch_inspection_status_label.hide()
-
-            # ------------------------------------------------
-            # STAGE 2 PATCH INSPECTION COMPLETE
-            # ------------------------------------------------
-
-            elif self.stage_completed[
-                STAGE_SURFACE_IDENTIFICATION
-            ]:
-
-                self.start_analysis_button.setVisible(
-                    True
-                )
+            elif self._all_patches_inspected():
 
                 self.start_analysis_button.setText(
                     "SPRAY TRAJECTORY"
                 )
-
                 self.start_analysis_button.setEnabled(
-                    not self._operation_running
-                    and self._stage_available(
+                    self._stage_available(
                         STAGE_SPRAY_TRAJECTORY
                     )
+                    and not self._operation_running
                 )
-
-                if hasattr(
-                    self,
-                    "patch_inspection_status_label",
-                ):
-                    self.patch_inspection_status_label.hide()
-
-            # ------------------------------------------------
-            # STAGE 2 PATCH INSPECTION STILL IN PROGRESS
-            # ------------------------------------------------
 
             else:
 
-                self.start_analysis_button.setVisible(
-                    False
+                self.start_analysis_button.setText(
+                    "PATCH INSPECTION IN PROGRESS"
                 )
-
-                if hasattr(
-                    self,
-                    "patch_inspection_status_label",
-                ):
-                    self.patch_inspection_status_label.setText(
-                        "PATCH INSPECTION IN PROGRESS"
-                    )
-
-                    self.patch_inspection_status_label.setStyleSheet(
-                        "color: #FFD740; font-weight: bold;"
-                    )
-
-                    self.patch_inspection_status_label.show()
+                self.start_analysis_button.setEnabled(False)
 
         elif self.active_stage == STAGE_SPRAY_TRAJECTORY:
 
-            self.patch_inspection_panel.hide()
-
-            self.start_analysis_button.setVisible(
-                True
-            )
-
             if (
-                self.stage_completed[
-                    STAGE_SPRAY_TRAJECTORY
-                ]
+                self.stage_completed[STAGE_SPRAY_TRAJECTORY]
                 and self._stage3_parameters_match()
             ):
 
                 self.start_analysis_button.setText(
                     "SPRAY TRAJECTORY COMPLETE"
                 )
-
-                self.start_analysis_button.setEnabled(
-                    False
-                )
+                self.start_analysis_button.setEnabled(False)
 
             else:
 
                 self.start_analysis_button.setText(
                     "GENERATE SPRAY TRAJECTORY"
                 )
-
                 self.start_analysis_button.setEnabled(
                     self._stage_available(
                         STAGE_SPRAY_TRAJECTORY
@@ -2420,17 +2313,10 @@ class MainWindow(QMainWindow):
 
         else:
 
-            self.start_analysis_button.setVisible(
-                True
-            )
-
             self.start_analysis_button.setText(
                 stage["action"]
             )
-
-            self.start_analysis_button.setEnabled(
-                False
-            )
+            self.start_analysis_button.setEnabled(False)
 
         # ----------------------------------------------------
         # WORKFLOW STATUS
@@ -2458,39 +2344,28 @@ class MainWindow(QMainWindow):
             )
 
         elif (
-            self.active_stage
-            == STAGE_SPRAY_TRAJECTORY
+            self.active_stage == STAGE_SPRAY_TRAJECTORY
             and self.current_stage3_result is not None
             and not self._stage3_parameters_match()
         ):
 
             self._set_workflow_status(
-                "STATUS: PARAMETERS CHANGED - "
-                "REGENERATION REQUIRED",
+                "STATUS: PARAMETERS CHANGED - REGENERATION REQUIRED",
                 "#FFD740",
             )
 
         elif (
-            self.active_stage
-            == STAGE_SPRAY_TRAJECTORY
-            and self.stage_completed[
-                STAGE_SPRAY_TRAJECTORY
-            ]
+            self.active_stage == STAGE_SPRAY_TRAJECTORY
+            and self.stage_completed[STAGE_SPRAY_TRAJECTORY]
+            and self._stage3_parameters_match()
         ):
 
             self._set_workflow_status(
-                "STATUS: TRAJECTORY GENERATED - "
-                "ENGINEERING REVIEW",
+                "STATUS: TRAJECTORY GENERATED - ENGINEERING REVIEW",
                 "#FFD740",
             )
 
-        elif (
-            self.active_stage
-            == STAGE_SPRAY_TRAJECTORY
-            and self._stage_available(
-                STAGE_SPRAY_TRAJECTORY
-            )
-        ):
+        elif self.active_stage == STAGE_SPRAY_TRAJECTORY:
 
             self._set_workflow_status(
                 "STATUS: READY FOR TRAJECTORY GENERATION",
@@ -2498,11 +2373,8 @@ class MainWindow(QMainWindow):
             )
 
         elif (
-            self.active_stage
-            == STAGE_SURFACE_IDENTIFICATION
-            and self.stage_completed[
-                STAGE_SURFACE_IDENTIFICATION
-            ]
+            self.active_stage == STAGE_SURFACE_IDENTIFICATION
+            and self._all_patches_inspected()
         ):
 
             self._set_workflow_status(
@@ -2511,8 +2383,7 @@ class MainWindow(QMainWindow):
             )
 
         elif (
-            self.active_stage
-            == STAGE_SURFACE_IDENTIFICATION
+            self.active_stage == STAGE_SURFACE_IDENTIFICATION
             and self.current_stage2_result is not None
         ):
 
@@ -2522,11 +2393,8 @@ class MainWindow(QMainWindow):
             )
 
         elif (
-            self.active_stage
-            == STAGE_GEOMETRY_INSPECTION
-            and self.stage_completed[
-                STAGE_GEOMETRY_INSPECTION
-            ]
+            self.active_stage == STAGE_GEOMETRY_INSPECTION
+            and self.stage_completed[STAGE_GEOMETRY_INSPECTION]
         ):
 
             self._set_workflow_status(
@@ -2534,20 +2402,14 @@ class MainWindow(QMainWindow):
                 "#00E676",
             )
 
-        elif (
-            self.active_stage
-            == STAGE_SURFACE_IDENTIFICATION
-        ):
+        elif self.active_stage == STAGE_SURFACE_IDENTIFICATION:
 
             self._set_workflow_status(
                 "STATUS: READY FOR SURFACE IDENTIFICATION",
                 "#00E5FF",
             )
 
-        elif (
-            self.active_stage
-            == STAGE_GEOMETRY_INSPECTION
-        ):
+        elif self.active_stage == STAGE_GEOMETRY_INSPECTION:
 
             self._set_workflow_status(
                 "STATUS: READY FOR GEOMETRY INSPECTION",
@@ -2561,7 +2423,14 @@ class MainWindow(QMainWindow):
                 "#00E5FF",
             )
 
+        # ----------------------------------------------------
+        # FINAL UI SYNCHRONIZATION
+        # ----------------------------------------------------
+
         self._refresh_pipeline()
+        self._refresh_stage2_action_visibility()
+
+
     def _refresh_stage2_action_visibility(self):
         """
         Refresh the Stage 2 inspection message and action button.
@@ -2710,25 +2579,127 @@ class MainWindow(QMainWindow):
     # ========================================================
 
     def _handle_active_stage_action(self):
+        """
+        Handle the main workflow action button.
+
+        Stage 2:
+            Verify all patches are inspected.
+            Switch to Stage 3.
+            Collapse Patch Inspection.
+            Start spray trajectory generation immediately.
+
+        Stage 3:
+            Generate or regenerate the spray trajectory.
+        """
+
         if self._operation_running:
             return
 
+        # ----------------------------------------------------
+        # STAGE 1 - PRODUCT SETUP
+        # ----------------------------------------------------
+
         if self.active_stage == STAGE_PRODUCT_SETUP:
+
             self.load_stl_dialog()
+            return
+
+        # ----------------------------------------------------
+        # STAGE 2 - GEOMETRY INSPECTION
+        # ----------------------------------------------------
 
         elif self.active_stage == STAGE_GEOMETRY_INSPECTION:
+
             self.run_geometry_analysis()
+            return
+
+        # ----------------------------------------------------
+        # STAGE 3 - SURFACE IDENTIFICATION
+        # ----------------------------------------------------
 
         elif self.active_stage == STAGE_SURFACE_IDENTIFICATION:
-            if self.stage_completed[STAGE_SURFACE_IDENTIFICATION]:
-                self._select_workflow_stage(
-                    STAGE_SPRAY_TRAJECTORY
-                )
-            elif self.current_stage2_result is None:
+
+            # Stage 2 has not been executed yet.
+            if self.current_stage2_result is None:
+
                 self.run_surface_identification()
+                return
+
+            # Verify the actual inspection records.
+            all_inspected = self._all_patches_inspected()
+
+            if not all_inspected:
+
+                self.stage_completed[
+                    STAGE_SURFACE_IDENTIFICATION
+                ] = False
+
+                self._refresh_workflow_ui()
+
+                QMessageBox.warning(
+                    self,
+                    "Patch Inspection Incomplete",
+                    "All patches must be inspected before "
+                    "generating the spray trajectory.",
+                )
+
+                return
+
+            # Synchronize Stage 2 completion.
+            self.stage_completed[
+                STAGE_SURFACE_IDENTIFICATION
+            ] = True
+
+            # Switch to Stage 3.
+            if not self._stage_available(
+                STAGE_SPRAY_TRAJECTORY
+            ):
+
+                QMessageBox.warning(
+                    self,
+                    "Stage 3 Not Available",
+                    "Spray trajectory generation is not available.",
+                )
+
+                return
+
+            self._select_workflow_stage(
+                STAGE_SPRAY_TRAJECTORY
+            )
+
+            # Collapse the Patch Inspection accordion.
+            self._collapse_patch_inspection_section()
+
+            # Start Stage 3 immediately.
+            self.run_spray_trajectory()
+
+            return
+
+        # ----------------------------------------------------
+        # STAGE 4 - SPRAY TRAJECTORY
+        # ----------------------------------------------------
 
         elif self.active_stage == STAGE_SPRAY_TRAJECTORY:
+
             self.run_spray_trajectory()
+            return
+
+        # ----------------------------------------------------
+        # OTHER STAGES
+        # ----------------------------------------------------
+
+        elif self.active_stage in (
+            STAGE_ROBOT_CONFIGURATION,
+            STAGE_EXECUTION,
+        ):
+
+            QMessageBox.information(
+                self,
+                "Not Available",
+                "This workflow stage is not implemented yet.",
+            )
+
+            return
 
     # ========================================================
     # OPERATION UI CONTROL
